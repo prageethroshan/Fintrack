@@ -1976,7 +1976,7 @@ function startAuthListener() {
       if(e.code && e.code !== 'auth/no-auth-event') {
         const errEl = document.getElementById('login-error');
         if(errEl) {
-          errEl.textContent = friendlyAuthError(e.code);
+          errEl.innerHTML = friendlyAuthError(e.code, e);
           errEl.classList.add('show');
         }
         document.getElementById('loading-screen').classList.add('hidden');
@@ -2052,7 +2052,7 @@ async function doLogin() {
         // Page will navigate away — redirect result handled in startAuthListener
       } catch(e2) {
         if(btn) { btn.disabled = false; btn.style.opacity = '1'; }
-        errEl.textContent = friendlyAuthError(e2.code);
+        errEl.innerHTML = friendlyAuthError(e2.code, e2);
         errEl.classList.add('show');
       }
     } else {
@@ -2067,14 +2067,23 @@ async function doLogout() {
   await auth.signOut();
 }
 
-function friendlyAuthError(code) {
+function friendlyAuthError(code, fullError) {
   const msgs = {
-    'auth/popup-blocked':          'Pop-up was blocked by your browser. Please allow pop-ups for this site.',
-    'auth/network-request-failed': 'Network error. Check your internet connection.',
-    'auth/too-many-requests':      'Too many attempts. Please try again later.',
-    'auth/unauthorized-domain':    'This domain is not authorised in Firebase. Add it under Authentication → Settings → Authorised domains.',
+    'auth/popup-blocked':                   '🚫 Pop-up blocked by your browser. Please allow pop-ups for this site and try again.',
+    'auth/network-request-failed':          '🌐 Network error. Check your internet connection.',
+    'auth/too-many-requests':               '⏳ Too many attempts. Please try again in a few minutes.',
+    'auth/unauthorized-domain':             '🔒 This domain is not authorised in Firebase.<br>Go to: Firebase Console → Authentication → Settings → Authorised domains → Add <b>prageethroshan.github.io</b>',
+    'auth/operation-not-supported-in-this-environment': '⚠️ Sign-in is not supported in this environment. Please open the app from your GitHub Pages URL.',
+    'auth/popup-closed-by-user':            'Sign-in cancelled.',
+    'auth/cancelled-popup-request':         'Sign-in cancelled.',
+    'auth/internal-error':                  '⚠️ Firebase internal error. The domain may not be authorised.<br>Check: Firebase → Authentication → Settings → Authorised domains → add <b>prageethroshan.github.io</b>',
   };
-  return msgs[code] || 'Sign-in error: ' + code;
+  if(!code) {
+    // Unknown error — show full error message for debugging
+    const msg = fullError ? (fullError.message || String(fullError)) : 'Unknown error';
+    return '⚠️ ' + msg + '<br><small style="opacity:0.7">If this persists, check that <b>prageethroshan.github.io</b> is added under Firebase → Authentication → Settings → Authorised domains.</small>';
+  }
+  return msgs[code] || ('⚠️ ' + code + '<br><small style="opacity:0.7">Check Firebase Console → Authentication → Settings → Authorised domains includes <b>prageethroshan.github.io</b></small>');
 }
 
 function showErr(el, msg) {
