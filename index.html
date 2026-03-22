@@ -1963,6 +1963,27 @@ function toast(msg,type='success'){
 // ============================================================
 
 function startAuthListener() {
+  // Handle the result when Google redirects back after signInWithRedirect
+  auth.getRedirectResult()
+    .then(result => {
+      if(result && result.user) {
+        // Redirect sign-in succeeded — onAuthStateChanged will fire next
+        document.getElementById('loading-screen').classList.remove('hidden');
+        document.getElementById('login-screen').classList.add('hidden');
+      }
+    })
+    .catch(e => {
+      if(e.code && e.code !== 'auth/no-auth-event') {
+        const errEl = document.getElementById('login-error');
+        if(errEl) {
+          errEl.textContent = friendlyAuthError(e.code);
+          errEl.classList.add('show');
+        }
+        document.getElementById('loading-screen').classList.add('hidden');
+        document.getElementById('login-screen').classList.remove('hidden');
+      }
+    });
+
   auth.onAuthStateChanged(async user => {
     if (user) {
       currentUser = user;
@@ -2008,15 +2029,34 @@ async function doLogin() {
 
   const btn = document.querySelector('.google-btn');
   if(btn) { btn.disabled = true; btn.style.opacity = '0.6'; }
+
+  const provider = new firebase.auth.GoogleAuthProvider();
+  provider.setCustomParameters({ prompt: 'select_account' });
+
   try {
-    const provider = new firebase.auth.GoogleAuthProvider();
-    provider.setCustomParameters({ prompt: 'select_account' });
-    // signInWithPopup — works on https:// (GitHub Pages, any web server)
+    // Try popup first — works on most desktop browsers
     await auth.signInWithPopup(provider);
-    // onAuthStateChanged handles loading data and routing after this
+    // onAuthStateChanged takes over from here
   } catch(e) {
-    if(btn) { btn.disabled = false; btn.style.opacity = '1'; }
-    if(e.code !== 'auth/popup-closed-by-user' && e.code !== 'auth/cancelled-popup-request') {
+    if(e.code === 'auth/popup-closed-by-user' || e.code === 'auth/cancelled-popup-request') {
+      // User closed popup — just re-enable the button
+      if(btn) { btn.disabled = false; btn.style.opacity = '1'; }
+    } else if(
+      e.code === 'auth/operation-not-supported-in-this-environment' ||
+      e.code === 'auth/popup-blocked'
+    ) {
+      // Popup blocked or not supported — fall back to redirect
+      if(btn) { btn.innerHTML = btn.innerHTML.replace(/Continue with Google|Signing in\.\.\./, 'Redirecting to Google…'); }
+      try {
+        await auth.signInWithRedirect(provider);
+        // Page will navigate away — redirect result handled in startAuthListener
+      } catch(e2) {
+        if(btn) { btn.disabled = false; btn.style.opacity = '1'; }
+        errEl.textContent = friendlyAuthError(e2.code);
+        errEl.classList.add('show');
+      }
+    } else {
+      if(btn) { btn.disabled = false; btn.style.opacity = '1'; }
       errEl.textContent = friendlyAuthError(e.code);
       errEl.classList.add('show');
     }
