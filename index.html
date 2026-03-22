@@ -362,8 +362,8 @@ tbody tr:last-child td{border-bottom:none}
       </div>
 
       <div class="fb-step">
-        <div class="fb-step-title"><span class="fb-step-num">2</span>Enable Google Sign-In</div>
-        <p>In your project → <strong>Build</strong> → <strong>Authentication</strong> → <strong>Get started</strong> → <strong>Sign-in method</strong> tab → Under <strong>"Additional providers"</strong> click <strong>Google</strong> → Toggle <strong>Enable</strong> → Set a support email → <strong>Save</strong>.</p>
+        <div class="fb-step-title"><span class="fb-step-num">2</span>Enable Email/Password Sign-In</div>
+        <p>In your project → <strong>Build</strong> → <strong>Authentication</strong> → <strong>Get started</strong> → <strong>Sign-in method</strong> tab → Under <strong>"Native providers"</strong> click <strong>Email/Password</strong> → Toggle <strong>Enable</strong> → <strong>Save</strong>.</p>
       </div>
 
       <div class="fb-step">
@@ -409,15 +409,66 @@ service cloud.firestore {
       <div class="login-brand">Fin<span>Track</span></div>
       <div class="login-tagline">Personal Finance Manager</div>
     </div>
+    <!-- LOGIN PANEL -->
     <div class="login-body" id="login-panel">
-      <div class="login-title">Welcome</div>
-      <div class="login-sub">Sign in with your Google account to access your finances securely</div>
-      <div class="login-error" id="login-error">Sign-in failed. Please try again.</div>
-      <button class="google-btn" onclick="doLogin()">
-        <svg width="20" height="20" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.08 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-3.59-13.46-8.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/><path fill="none" d="M0 0h48v48H0z"/></svg>
-        Continue with Google
-      </button>
-      <div class="login-hint" style="margin-top:20px">Your data is private and encrypted.<br>Only you can access your financial records.</div>
+      <div class="login-title">Welcome back</div>
+      <div class="login-sub">Sign in to access your finances</div>
+      <div class="login-error" id="login-error"></div>
+      <div class="login-field">
+        <label>Email Address</label>
+        <input type="email" id="login-email" placeholder="you@example.com" onkeydown="if(event.key==='Enter')document.getElementById('login-pw').focus()">
+      </div>
+      <div class="login-field">
+        <label>Password</label>
+        <div class="pw-wrap">
+          <input type="password" id="login-pw" placeholder="Enter your password" onkeydown="if(event.key==='Enter')doLogin()">
+          <button class="pw-toggle" onclick="togglePw('login-pw',this)" tabindex="-1">👁</button>
+        </div>
+      </div>
+      <button class="login-btn" onclick="doLogin()">Sign In →</button>
+      <div class="login-hint">No account? <a onclick="showRegister()">Create one</a> &nbsp;·&nbsp; <a onclick="showResetPanel()">Forgot password?</a></div>
+    </div>
+    <!-- REGISTER PANEL -->
+    <div class="login-body" id="register-panel" style="display:none">
+      <div class="login-title">Create Account</div>
+      <div class="login-sub">Register to start tracking your finances</div>
+      <div class="login-error" id="register-error"></div>
+      <div class="login-field">
+        <label>Your Name</label>
+        <input type="text" id="reg-name" placeholder="e.g. P R Weeathunga">
+      </div>
+      <div class="login-field">
+        <label>Email Address</label>
+        <input type="email" id="reg-email" placeholder="you@example.com">
+      </div>
+      <div class="login-field">
+        <label>Password</label>
+        <div class="pw-wrap">
+          <input type="password" id="reg-pw1" placeholder="Min. 6 characters">
+          <button class="pw-toggle" onclick="togglePw('reg-pw1',this)" tabindex="-1">👁</button>
+        </div>
+      </div>
+      <div class="login-field">
+        <label>Confirm Password</label>
+        <div class="pw-wrap">
+          <input type="password" id="reg-pw2" placeholder="Re-enter password" onkeydown="if(event.key==='Enter')doRegister()">
+          <button class="pw-toggle" onclick="togglePw('reg-pw2',this)" tabindex="-1">👁</button>
+        </div>
+      </div>
+      <button class="login-btn" onclick="doRegister()">Create Account →</button>
+      <div class="login-hint">Already have an account? <a onclick="showLoginPanel()">Sign in</a></div>
+    </div>
+    <!-- RESET PANEL -->
+    <div class="login-body" id="reset-panel" style="display:none">
+      <div class="login-title">Reset Password</div>
+      <div class="login-sub">We'll send a reset link to your email.</div>
+      <div class="login-error" id="reset-error"></div>
+      <div class="login-field" style="margin-top:8px">
+        <label>Email Address</label>
+        <input type="email" id="reset-email" placeholder="you@example.com" onkeydown="if(event.key==='Enter')doReset()">
+      </div>
+      <button class="login-btn" onclick="doReset()">Send Reset Email →</button>
+      <div class="login-hint"><a onclick="showLoginPanel()">← Back to sign in</a></div>
     </div>
   </div>
 </div>
@@ -445,7 +496,7 @@ service cloud.firestore {
   <div class="s-footer">
     <div class="s-user" id="s-user-name">My Finances</div>
     <div class="s-user-sub" id="s-user-sub">Personal Account</div>
-    <button onclick="doLogout()" style="margin-top:10px;width:100%;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.1);color:var(--sidebar-text);border-radius:8px;padding:7px;font-size:12px;cursor:pointer;font-family:Plus Jakarta Sans,sans-serif;transition:all .15s" onmouseover="this.style.background='rgba(201,80,42,0.3)'" onmouseout="this.style.background='rgba(255,255,255,0.07)'">🚪 Sign Out</button>
+    <button onclick="doLogout()" style="margin-top:10px;width:100%;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.1);color:var(--sidebar-text);border-radius:8px;padding:7px;font-size:12px;cursor:pointer;font-family:Plus Jakarta Sans,sans-serif;transition:all .15s" onmouseover="this.style.background='rgba(201,80,42,0.3)'" onmouseout="this.style.background='rgba(255,255,255,0.07)'">🔒 Sign Out</button>
   </div>
 </nav>
 
@@ -831,7 +882,8 @@ service cloud.firestore {
         <div class="settings-row"><div><div class="settings-label">Financial Year Start</div><div class="settings-sub">Month your financial year begins</div></div><select class="filter-select" id="set-fy"><option value="1">January</option><option value="4">April</option><option value="7">July</option><option value="10">October</option></select></div>
       </div>
       <div class="settings-group">
-        <div class="settings-row"><div><div class="settings-label">Signed In As</div><div class="settings-sub" id="set-email-display">Loading...</div></div><span class="badge badge-green" style="font-size:11px">Google Account</span></div>
+        <div class="settings-row"><div><div class="settings-label">Signed In As</div><div class="settings-sub" id="set-email-display">Loading...</div></div><span class="badge badge-green" style="font-size:11px">Email Auth</span></div>
+        <div class="settings-row"><div><div class="settings-label">Change Password</div><div class="settings-sub">Send a password reset link to your email</div></div><button class="btn btn-ghost btn-sm" onclick="doForgotPwFromSettings()">Send Reset Email</button></div>
         <div class="settings-row"><div><div class="settings-label">Reconfigure Firebase</div><div class="settings-sub">Re-enter your Firebase credentials</div></div><button class="btn btn-ghost btn-sm" onclick="showFbSetup()">Reconfigure</button></div>
         <div class="settings-row"><div><div class="settings-label">Export All Data</div><div class="settings-sub">Download all transactions as CSV</div></div><button class="btn btn-ghost btn-sm" onclick="exportCSV()">Export CSV</button></div>
         <div class="settings-row"><div><div class="settings-label">Clear All Data</div><div class="settings-sub" style="color:var(--red)">⚠ This will permanently delete all data</div></div><button class="btn btn-danger btn-sm" onclick="clearAllData()">Clear Data</button></div>
@@ -1959,46 +2011,24 @@ function toast(msg,type='success'){
 
 
 // ============================================================
-// AUTH — Google Sign-In
+// AUTH — Email / Password
 // ============================================================
 
 function startAuthListener() {
-  // Handle the result when Google redirects back after signInWithRedirect
-  auth.getRedirectResult()
-    .then(result => {
-      if(result && result.user) {
-        // Redirect sign-in succeeded — onAuthStateChanged will fire next
-        document.getElementById('loading-screen').classList.remove('hidden');
-        document.getElementById('login-screen').classList.add('hidden');
-      }
-    })
-    .catch(e => {
-      if(e.code && e.code !== 'auth/no-auth-event') {
-        const errEl = document.getElementById('login-error');
-        if(errEl) {
-          errEl.innerHTML = friendlyAuthError(e.code, e);
-          errEl.classList.add('show');
-        }
-        document.getElementById('loading-screen').classList.add('hidden');
-        document.getElementById('login-screen').classList.remove('hidden');
-      }
-    });
-
   auth.onAuthStateChanged(async user => {
-    if (user) {
+    if(user) {
       currentUser = user;
       document.getElementById('login-screen').classList.add('hidden');
       document.getElementById('loading-screen').classList.remove('hidden');
       await loadDB();
-      // If first sign-in, use Google display name
-      if (!DB.settings.name || DB.settings.name === 'My Finances') {
+      if(!DB.settings.name || DB.settings.name === 'My Finances') {
         DB.settings.name = user.displayName || 'My Finances';
         await saveDB(DB);
       }
       document.getElementById('loading-screen').classList.add('hidden');
       subscribeRealtime();
-      document.getElementById('s-user-name').textContent = DB.settings.name || user.displayName || 'My Finances';
-      document.getElementById('s-user-sub').textContent  = user.email || 'Personal Account';
+      document.getElementById('s-user-name').textContent = DB.settings.name || 'My Finances';
+      document.getElementById('s-user-sub').textContent  = user.email || '';
       const emailEl = document.getElementById('set-email-display');
       if(emailEl) emailEl.textContent = user.email;
       renderDashboard();
@@ -2007,75 +2037,114 @@ function startAuthListener() {
       if(unsubscribeSnapshot) { unsubscribeSnapshot(); unsubscribeSnapshot = null; }
       document.getElementById('loading-screen').classList.add('hidden');
       document.getElementById('login-screen').classList.remove('hidden');
-      const errEl = document.getElementById('login-error');
-      if(errEl) errEl.classList.remove('show');
+      showLoginPanel();
     }
   });
 }
 
+function showLoginPanel() {
+  document.getElementById('login-panel').style.display    = 'block';
+  document.getElementById('register-panel').style.display = 'none';
+  document.getElementById('reset-panel').style.display    = 'none';
+  const e = document.getElementById('login-error');
+  if(e) { e.textContent = ''; e.classList.remove('show'); }
+}
+function showRegister() {
+  document.getElementById('login-panel').style.display    = 'none';
+  document.getElementById('register-panel').style.display = 'block';
+  document.getElementById('reset-panel').style.display    = 'none';
+}
+function showResetPanel() {
+  document.getElementById('login-panel').style.display    = 'none';
+  document.getElementById('register-panel').style.display = 'none';
+  document.getElementById('reset-panel').style.display    = 'block';
+  const email = document.getElementById('login-email').value.trim();
+  if(email) document.getElementById('reset-email').value = email;
+}
+
 async function doLogin() {
+  const email = document.getElementById('login-email').value.trim();
+  const pw    = document.getElementById('login-pw').value;
   const errEl = document.getElementById('login-error');
   errEl.classList.remove('show');
-
-  // Google Sign-In requires https:// — cannot work from a local file
-  if(location.protocol === 'file:') {
-    errEl.innerHTML = '⚠️ You are opening this file directly from your computer.<br><br>'
-      + 'Google Sign-In only works when hosted on a web server.<br><br>'
-      + 'Upload <code>index.html</code> to GitHub Pages and open from '
-      + '<code>https://prageethroshan.github.io/Fintrack</code>.';
-    errEl.classList.add('show');
-    return;
-  }
-
-  const btn = document.querySelector('.google-btn');
-  const originalHTML = btn ? btn.innerHTML : '';
-  if(btn) { btn.disabled = true; btn.style.opacity = '0.65'; }
-
+  if(!email || !pw) { showErr(errEl, 'Please enter your email and password.'); return; }
+  const btn = document.querySelector('.login-btn');
+  if(btn) { btn.disabled = true; btn.textContent = 'Signing in…'; }
   try {
-    const provider = new firebase.auth.GoogleAuthProvider();
-    provider.setCustomParameters({ prompt: 'select_account' });
-    // Use redirect — most reliable across all browsers and GitHub Pages
-    await auth.signInWithRedirect(provider);
-    // Page navigates away here; result is caught by getRedirectResult() on reload
+    await auth.signInWithEmailAndPassword(email, pw);
   } catch(e) {
-    if(btn) { btn.disabled = false; btn.style.opacity = '1'; btn.innerHTML = originalHTML; }
-    errEl.innerHTML = friendlyAuthError(e.code, e);
-    errEl.classList.add('show');
+    if(btn) { btn.disabled = false; btn.textContent = 'Sign In →'; }
+    showErr(errEl, friendlyAuthError(e.code));
+    document.getElementById('login-pw').value = '';
   }
 }
 
-async function doLogout() {
-  await auth.signOut();
+async function doRegister() {
+  const name  = document.getElementById('reg-name').value.trim();
+  const email = document.getElementById('reg-email').value.trim();
+  const pw1   = document.getElementById('reg-pw1').value;
+  const pw2   = document.getElementById('reg-pw2').value;
+  const errEl = document.getElementById('register-error');
+  errEl.classList.remove('show');
+  if(!name)          { showErr(errEl, 'Please enter your name.');                  return; }
+  if(!email)         { showErr(errEl, 'Please enter your email.');                 return; }
+  if(pw1.length < 6) { showErr(errEl, 'Password must be at least 6 characters.'); return; }
+  if(pw1 !== pw2)    { showErr(errEl, 'Passwords do not match.');                  return; }
+  try {
+    const cred = await auth.createUserWithEmailAndPassword(email, pw1);
+    await cred.user.updateProfile({ displayName: name });
+    DB.settings.name = name;
+  } catch(e) { showErr(errEl, friendlyAuthError(e.code)); }
 }
 
-function friendlyAuthError(code, fullError) {
-  const msgs = {
-    'auth/popup-blocked':                   '🚫 Pop-up blocked by your browser. Please allow pop-ups for this site and try again.',
-    'auth/network-request-failed':          '🌐 Network error. Check your internet connection.',
-    'auth/too-many-requests':               '⏳ Too many attempts. Please try again in a few minutes.',
-    'auth/unauthorized-domain':             '🔒 This domain is not authorised in Firebase.<br>Go to: Firebase Console → Authentication → Settings → Authorised domains → Add <b>prageethroshan.github.io</b>',
-    'auth/operation-not-supported-in-this-environment': '⚠️ Sign-in is not supported in this environment. Please open the app from your GitHub Pages URL.',
-    'auth/popup-closed-by-user':            'Sign-in cancelled.',
-    'auth/cancelled-popup-request':         'Sign-in cancelled.',
-    'auth/internal-error':                  '⚠️ Firebase internal error. The domain may not be authorised.<br>Check: Firebase → Authentication → Settings → Authorised domains → add <b>prageethroshan.github.io</b>',
+async function doReset() {
+  const email = document.getElementById('reset-email').value.trim();
+  const errEl = document.getElementById('reset-error');
+  errEl.classList.remove('show');
+  if(!email) { showErr(errEl, 'Please enter your email address.'); return; }
+  try {
+    await auth.sendPasswordResetEmail(email);
+    toast('Reset email sent! Check your inbox.');
+    showLoginPanel();
+  } catch(e) { showErr(errEl, friendlyAuthError(e.code)); }
+}
+
+async function doLogout() { await auth.signOut(); }
+
+async function doForgotPwFromSettings() {
+  if(!currentUser) return;
+  try {
+    await auth.sendPasswordResetEmail(currentUser.email);
+    toast('Password reset email sent to ' + currentUser.email);
+  } catch(e) { toast('Error: ' + e.message, 'error'); }
+}
+
+function friendlyAuthError(code) {
+  const m = {
+    'auth/user-not-found':         'No account found with this email.',
+    'auth/wrong-password':         'Incorrect password. Please try again.',
+    'auth/invalid-credential':     'Incorrect email or password.',
+    'auth/invalid-email':          'Please enter a valid email address.',
+    'auth/email-already-in-use':   'An account with this email already exists.',
+    'auth/weak-password':          'Password must be at least 6 characters.',
+    'auth/too-many-requests':      'Too many attempts. Please try again later.',
+    'auth/network-request-failed': 'Network error. Check your connection.',
+    'auth/user-disabled':          'This account has been disabled.',
   };
-  if(!code) {
-    // Unknown error — show full error message for debugging
-    const msg = fullError ? (fullError.message || String(fullError)) : 'Unknown error';
-    return '⚠️ ' + msg + '<br><small style="opacity:0.7">If this persists, check that <b>prageethroshan.github.io</b> is added under Firebase → Authentication → Settings → Authorised domains.</small>';
-  }
-  return msgs[code] || ('⚠️ ' + code + '<br><small style="opacity:0.7">Check Firebase Console → Authentication → Settings → Authorised domains includes <b>prageethroshan.github.io</b></small>');
+  return m[code] || ('Error: ' + (code || 'unknown'));
 }
 
 function showErr(el, msg) {
-  el.textContent = msg;
-  el.style.display = 'block';
-  el.classList.add('show');
+  el.textContent = msg; el.style.display = 'block'; el.classList.add('show');
 }
 
-async function doForgotPwFromSettings() {
-  toast('Password is managed by your Google account at myaccount.google.com');
+function togglePw(inputId, btn) {
+  const inp = document.getElementById(inputId);
+  if(inp.type === 'password') { inp.type = 'text';     btn.textContent = '🙈'; }
+  else                        { inp.type = 'password'; btn.textContent = '👁'; }
 }
+
+
 
 // ============================================================
 // INIT
