@@ -1963,20 +1963,6 @@ function toast(msg,type='success'){
 // ============================================================
 
 function startAuthListener() {
-  // Handle redirect result first (fires after Google redirects back to the app)
-  auth.getRedirectResult().then(result => {
-    // result.user is null if no redirect just happened — that's fine,
-    // onAuthStateChanged below will handle the persisted session
-  }).catch(e => {
-    const errEl = document.getElementById('login-error');
-    if(errEl && e.code !== 'auth/no-auth-event') {
-      errEl.textContent = friendlyAuthError(e.code);
-      errEl.classList.add('show');
-      document.getElementById('login-screen').classList.remove('hidden');
-      document.getElementById('loading-screen').classList.add('hidden');
-    }
-  });
-
   auth.onAuthStateChanged(async user => {
     if (user) {
       currentUser = user;
@@ -2010,25 +1996,30 @@ async function doLogin() {
   const errEl = document.getElementById('login-error');
   errEl.classList.remove('show');
 
-  // Google Sign-In cannot work from file:// — must be hosted on a web server
+  // Google Sign-In requires https:// — cannot work from a local file
   if(location.protocol === 'file:') {
     errEl.innerHTML = '⚠️ You are opening this file directly from your computer.<br><br>'
-      + 'Google Sign-In only works when the app is hosted on a web server.<br><br>'
-      + '<strong>Please upload <code>index.html</code> to GitHub Pages</strong> and open it from there (e.g. <code>https://your-name.github.io/fintrack</code>).';
+      + 'Google Sign-In only works when hosted on a web server.<br><br>'
+      + '<strong>Upload <code>index.html</code> to GitHub Pages</strong> and open it from '
+      + '<code>https://your-name.github.io/fintrack</code>.';
     errEl.classList.add('show');
     return;
   }
 
   const btn = document.querySelector('.google-btn');
-  if(btn) { btn.disabled = true; btn.innerHTML = btn.innerHTML.replace('Continue with Google','Redirecting to Google...'); }
+  if(btn) { btn.disabled = true; btn.style.opacity = '0.6'; }
   try {
     const provider = new firebase.auth.GoogleAuthProvider();
     provider.setCustomParameters({ prompt: 'select_account' });
-    await auth.signInWithRedirect(provider);
+    // signInWithPopup — works on https:// (GitHub Pages, any web server)
+    await auth.signInWithPopup(provider);
+    // onAuthStateChanged handles loading data and routing after this
   } catch(e) {
-    if(btn) { btn.disabled = false; btn.innerHTML = btn.innerHTML.replace('Redirecting to Google...','Continue with Google'); }
-    errEl.textContent = friendlyAuthError(e.code);
-    errEl.classList.add('show');
+    if(btn) { btn.disabled = false; btn.style.opacity = '1'; }
+    if(e.code !== 'auth/popup-closed-by-user' && e.code !== 'auth/cancelled-popup-request') {
+      errEl.textContent = friendlyAuthError(e.code);
+      errEl.classList.add('show');
+    }
   }
 }
 
