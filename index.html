@@ -344,6 +344,13 @@ tbody tr:last-child td{border-bottom:none}
 <div id="loading-screen">
   <div class="spinner"></div>
   <div class="loading-text">Connecting to your data...</div>
+  <div id="loading-slow" style="display:none;margin-top:16px;text-align:center">
+    <div style="font-size:12px;color:#8fa090;max-width:320px;line-height:1.6">
+      Taking longer than expected.<br>
+      This usually means <strong>Firestore Database</strong> is not set up yet,<br>or the security rules have not been published.
+    </div>
+    <button onclick="forceEnterApp()" style="margin-top:14px;padding:9px 20px;background:var(--accent);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-family:Plus Jakarta Sans,sans-serif">Enter App Anyway →</button>
+  </div>
 </div>
 
 <!-- FIREBASE SETUP SCREEN -->
@@ -1101,11 +1108,17 @@ function userDoc() {
 
 async function loadDB() {
   if(!db || !currentUser) { DB = defaultDB(); ensureCashAccount(); return; }
+
+  // Timeout after 8 seconds — avoids hanging forever if Firestore is
+  // unreachable (e.g. rules blocking, database not created yet)
+  const timeout = new Promise((_, reject) =>
+    setTimeout(() => reject(new Error('TIMEOUT')), 8000)
+  );
+
   try {
-    const snap = await userDoc().get();
+    const snap = await Promise.race([userDoc().get(), timeout]);
     if(snap.exists) {
       DB = snap.data();
-      // Ensure arrays exist
       DB.accounts     = DB.accounts     || [];
       DB.transactions = DB.transactions || [];
       DB.assets       = DB.assets       || [];
@@ -1114,14 +1127,39 @@ async function loadDB() {
       DB.categories   = DB.categories   || { income: defaultIncCats(), expense: defaultExpCats() };
       DB.settings     = DB.settings     || { name: 'My Finances', currency: 'Rs.', fyStart: 1 };
     } else {
+      // First login — create fresh database
       DB = defaultDB();
-      await saveDB(DB);
+      await Promise.race([saveDB(DB), timeout]);
     }
     ensureCashAccount();
   } catch(e) {
     console.error('loadDB error:', e);
     DB = defaultDB();
+    ensureCashAccount();
+    // Show a helpful message if it timed out (most likely Firestore rules issue)
+    if(e.message === 'TIMEOUT' || (e.code && e.code.includes('permission'))) {
+      showLoadError(
+        '⚠️ Could not connect to the database.<br><br>' +
+        'Most likely your <strong>Firestore security rules</strong> are blocking access, ' +
+        'or the <strong>Firestore database has not been created yet</strong>.<br><br>' +
+        'Please check:<br>' +
+        '1. Firebase Console → <strong>Firestore Database</strong> → Make sure it exists<br>' +
+        '2. Firestore → <strong>Rules</strong> tab → Paste the rules from the setup screen → Publish<br><br>' +
+        'The app will continue with local data only.'
+      );
+    }
   }
+}
+
+function showLoadError(html) {
+  document.getElementById('loading-screen').classList.add('hidden');
+  // Show error on the dashboard after app loads
+  setTimeout(() => {
+    const el = document.createElement('div');
+    el.style.cssText = 'position:fixed;top:80px;right:24px;max-width:380px;background:#fff;border:1.5px solid #c0392b;border-radius:14px;padding:20px;z-index:5000;box-shadow:0 8px 32px rgba(0,0,0,0.15);font-size:13px;line-height:1.6;color:#333';
+    el.innerHTML = html + '<br><button onclick="this.parentElement.remove()" style="margin-top:12px;padding:6px 14px;background:#c0392b;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:12px">Dismiss</button>';
+    document.body.appendChild(el);
+  }, 500);
 }
 
 async function saveDB(dbObj) {
@@ -2014,13 +2052,29 @@ function toast(msg,type='success'){
 // AUTH — Email / Password
 // ============================================================
 
+function forceEnterApp() {
+  // Skip waiting for Firestore — enter with default/local data
+  DB = DB && DB.settings ? DB : defaultDB();
+  ensureCashAccount();
+  document.getElementById('loading-screen').classList.add('hidden');
+  document.getElementById('s-user-name').textContent = DB.settings.name || 'My Finances';
+  if(currentUser) document.getElementById('s-user-sub').textContent = currentUser.email || '';
+  renderDashboard();
+}
+
 function startAuthListener() {
   auth.onAuthStateChanged(async user => {
     if(user) {
       currentUser = user;
       document.getElementById('login-screen').classList.add('hidden');
       document.getElementById('loading-screen').classList.remove('hidden');
+      // Show "taking long" message after 5 seconds
+      const slowTimer = setTimeout(() => {
+        const el = document.getElementById('loading-slow');
+        if(el) el.style.display = 'block';
+      }, 5000);
       await loadDB();
+      clearTimeout(slowTimer);
       if(!DB.settings.name || DB.settings.name === 'My Finances') {
         DB.settings.name = user.displayName || 'My Finances';
         await saveDB(DB);
