@@ -6,9 +6,20 @@
 <title>FinTrack — Personal Finance Manager</title>
 <link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/12.3.0/firebase-app-compat.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/12.3.0/firebase-auth-compat.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/12.3.0/firebase-firestore-compat.min.js"></script>
+<script type="module">
+  import { initializeApp, getApps, getApp } from 'https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js';
+  import { getAuth, onAuthStateChanged, signInWithEmailAndPassword,
+           createUserWithEmailAndPassword, signOut, sendPasswordResetEmail,
+           updateProfile } from 'https://www.gstatic.com/firebasejs/11.0.0/firebase-auth.js';
+  import { getFirestore, doc, getDoc, setDoc, onSnapshot }
+           from 'https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js';
+
+  // Expose to global scope so non-module scripts can use them
+  window._firebase = { initializeApp, getApps, getApp, getAuth, onAuthStateChanged,
+    signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut,
+    sendPasswordResetEmail, updateProfile, getFirestore, doc, getDoc, setDoc, onSnapshot };
+  window.dispatchEvent(new Event('firebase-ready'));
+</script>
 <style>
 :root {
   --bg: #f0ebe2;
@@ -1055,11 +1066,11 @@ function saveFbConfig(cfg) { localStorage.setItem(FB_CONFIG_KEY, JSON.stringify(
 
 function initFirebaseFromConfig(config) {
   try {
-    if (!firebase.apps.length) {
-      firebase.initializeApp(config);
-    }
-    db   = firebase.firestore();
-    auth = firebase.auth();
+    const F = window._firebase;
+    if(!F) throw new Error('Firebase SDK not loaded yet');
+    const app = F.getApps().length ? F.getApp() : F.initializeApp(config);
+    auth = F.getAuth(app);
+    db   = F.getFirestore(app);
     return true;
   } catch(e) {
     console.error('Firebase init error:', e);
@@ -1086,11 +1097,17 @@ function initFirebase() {
   try { config = parseFirebaseConfig(raw); }
   catch(e) { showFbErr('Could not parse config. Make sure you copied the full firebaseConfig object. Error: ' + e.message); return; }
   if(!config.apiKey || !config.projectId) { showFbErr('Config is missing apiKey or projectId. Please check the pasted config.'); return; }
-  const ok = initFirebaseFromConfig(config);
-  if(!ok) { showFbErr('Firebase initialisation failed. Please check your config.'); return; }
-  saveFbConfig(config);
-  document.getElementById('fb-setup-screen').classList.add('hidden');
-  startAuthListener();
+  // Wait for Firebase ES module to be ready before initialising
+  function tryInit() {
+    if(!window._firebase) { showFbErr('Firebase SDK is still loading. Please wait a moment and try again.'); return; }
+    const ok = initFirebaseFromConfig(config);
+    if(!ok) { showFbErr('Firebase initialisation failed. Please check your config.'); return; }
+    saveFbConfig(config);
+    document.getElementById('fb-setup-screen').classList.add('hidden');
+    startAuthListener();
+  }
+  if(window._firebase) { tryInit(); }
+  else { window.addEventListener('firebase-ready', tryInit, {once:true}); }
 }
 
 function showFbErr(msg) {
@@ -1103,7 +1120,8 @@ function showFbSetup() {
 
 // Firestore helpers
 function userDoc() {
-  return db.collection('users').doc(currentUser.uid).collection('data').doc('main');
+  const F = window._firebase;
+  return F.doc(db, 'users', currentUser.uid, 'data', 'main');
 }
 
 async function loadDB() {
@@ -1116,8 +1134,8 @@ async function loadDB() {
   );
 
   try {
-    const snap = await Promise.race([userDoc().get(), timeout]);
-    if(snap.exists) {
+    const snap = await Promise.race([window._firebase.getDoc(userDoc()), timeout]);
+    if(snap.exists()) {
       DB = snap.data();
       DB.accounts     = DB.accounts     || [];
       DB.transactions = DB.transactions || [];
@@ -1182,7 +1200,7 @@ async function saveDB(dbObj) {
   if(!db) { showSyncError('Firebase not initialised. Please reconfigure Firebase in Settings.'); return; }
   if(!currentUser) { showSyncError('Not signed in. Please sign out and sign back in.'); return; }
   try {
-    await userDoc().set(dbObj);
+    await window._firebase.setDoc(userDoc(), dbObj);
     hideSyncError(); // clear any previous error on success
   } catch(e) {
     console.error('saveDB error:', e.code, e.message);
@@ -1218,8 +1236,8 @@ function hideSyncError() {
 // Real-time listener — syncs changes from other devices
 function subscribeRealtime() {
   if(unsubscribeSnapshot) unsubscribeSnapshot();
-  unsubscribeSnapshot = userDoc().onSnapshot(snap => {
-    if(snap.exists && snap.metadata.hasPendingWrites === false) {
+  unsubscribeSnapshot = window._firebase.onSnapshot(userDoc(), snap => {
+    if(snap.exists() && snap.metadata.hasPendingWrites === false) {
       const newDB = snap.data();
       // Only update if changed from another device
       if(JSON.stringify(newDB) !== JSON.stringify(DB)) {
@@ -2106,7 +2124,7 @@ function forceEnterApp() {
 }
 
 function startAuthListener() {
-  auth.onAuthStateChanged(async user => {
+  window._firebase.onAuthStateChanged(auth, async user => {
     if(user) {
       currentUser = user;
       document.getElementById('login-screen').classList.add('hidden');
@@ -2168,7 +2186,7 @@ async function doLogin() {
   const btn = document.querySelector('.login-btn');
   if(btn) { btn.disabled = true; btn.textContent = 'Signing in…'; }
   try {
-    await auth.signInWithEmailAndPassword(email, pw);
+    await window._firebase.signInWithEmailAndPassword(auth, email, pw);
   } catch(e) {
     if(btn) { btn.disabled = false; btn.textContent = 'Sign In →'; }
     showErr(errEl, friendlyAuthError(e.code));
@@ -2188,8 +2206,8 @@ async function doRegister() {
   if(pw1.length < 6) { showErr(errEl, 'Password must be at least 6 characters.'); return; }
   if(pw1 !== pw2)    { showErr(errEl, 'Passwords do not match.');                  return; }
   try {
-    const cred = await auth.createUserWithEmailAndPassword(email, pw1);
-    await cred.user.updateProfile({ displayName: name });
+    const cred = await window._firebase.createUserWithEmailAndPassword(auth, email, pw1);
+    await window._firebase.updateProfile(cred.user, { displayName: name });
     DB.settings.name = name;
   } catch(e) { showErr(errEl, friendlyAuthError(e.code)); }
 }
@@ -2200,18 +2218,18 @@ async function doReset() {
   errEl.classList.remove('show');
   if(!email) { showErr(errEl, 'Please enter your email address.'); return; }
   try {
-    await auth.sendPasswordResetEmail(email);
+    await window._firebase.sendPasswordResetEmail(auth, email);
     toast('Reset email sent! Check your inbox.');
     showLoginPanel();
   } catch(e) { showErr(errEl, friendlyAuthError(e.code)); }
 }
 
-async function doLogout() { await auth.signOut(); }
+async function doLogout() { await window._firebase.signOut(auth); }
 
 async function doForgotPwFromSettings() {
   if(!currentUser) return;
   try {
-    await auth.sendPasswordResetEmail(currentUser.email);
+    await window._firebase.sendPasswordResetEmail(auth, currentUser.email);
     toast('Password reset email sent to ' + currentUser.email);
   } catch(e) { toast('Error: ' + e.message, 'error'); }
 }
@@ -2260,15 +2278,19 @@ document.addEventListener('DOMContentLoaded', () => {
     return;
   }
 
-  const ok = initFirebaseFromConfig(fbConfig);
-  if(!ok) {
-    document.getElementById('loading-screen').classList.add('hidden');
-    document.getElementById('fb-setup-screen').classList.remove('hidden');
-    showFbErr('Saved config failed to initialise. Please re-enter your config.');
-    return;
+  function tryAutoInit() {
+    if(!window._firebase) { return; } // not ready yet, event will fire
+    const ok = initFirebaseFromConfig(fbConfig);
+    if(!ok) {
+      document.getElementById('loading-screen').classList.add('hidden');
+      document.getElementById('fb-setup-screen').classList.remove('hidden');
+      showFbErr('Saved config failed to initialise. Please re-enter your config.');
+      return;
+    }
+    startAuthListener();
   }
-
-  startAuthListener();
+  if(window._firebase) { tryAutoInit(); }
+  else { window.addEventListener('firebase-ready', tryAutoInit, {once:true}); }
 });
 </script>
 </body>
