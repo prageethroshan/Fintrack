@@ -1126,61 +1126,73 @@ function userDoc() {
 
 async function loadDB() {
   if(!db || !currentUser) { DB = defaultDB(); ensureCashAccount(); return; }
-
-  // Timeout after 8 seconds — avoids hanging forever if Firestore is
-  // unreachable (e.g. rules blocking, database not created yet)
-  const timeout = new Promise((_, reject) =>
-    setTimeout(() => reject(new Error('TIMEOUT')), 8000)
-  );
-
+  const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), 10000));
   try {
     const snap = await Promise.race([window._firebase.getDoc(userDoc()), timeout]);
     if(snap.exists()) {
-      DB = snap.data();
-      DB.accounts     = DB.accounts     || [];
-      DB.transactions = DB.transactions || [];
-      DB.assets       = DB.assets       || [];
-      DB.liabilities  = DB.liabilities  || [];
-      DB.budgets      = DB.budgets      || [];
-      DB.categories   = DB.categories   || { income: defaultIncCats(), expense: defaultExpCats() };
-      DB.settings     = DB.settings     || { name: 'My Finances', currency: 'Rs.', fyStart: 1 };
+      const raw = snap.data();
+      // Validate structure — if corrupted (e.g. contains raw account fields), reset
+      if(raw && Array.isArray(raw.transactions) && Array.isArray(raw.accounts) && raw.settings) {
+        DB = raw;
+        DB.accounts     = DB.accounts     || [];
+        DB.transactions = DB.transactions || [];
+        DB.assets       = DB.assets       || [];
+        DB.liabilities  = DB.liabilities  || [];
+        DB.budgets      = DB.budgets      || [];
+        DB.categories   = DB.categories   || { income: defaultIncCats(), expense: defaultExpCats() };
+        DB.settings     = DB.settings     || { name: 'My Finances', currency: 'Rs.', fyStart: 1 };
+      } else {
+        // Corrupted data in Firestore — reset to clean default
+        console.warn('Firestore data appears corrupted — resetting to default DB', raw);
+        DB = defaultDB();
+        await Promise.race([saveDB(DB), timeout]);
+      }
     } else {
-      // First login — create fresh database
       DB = defaultDB();
       await Promise.race([saveDB(DB), timeout]);
     }
     ensureCashAccount();
+    hideSyncError();
   } catch(e) {
-    console.error('loadDB error:', e);
+    console.error('loadDB error:', e.code, e.message, e);
     DB = defaultDB();
     ensureCashAccount();
 
-    let hint = '';
-    const code = e.code || '';
+    const code = (e.code || '').toLowerCase();
     const msg  = e.message || '';
 
+    let reason = '';
+    let fix = '';
+
     if(msg === 'TIMEOUT') {
-      hint = 'Request timed out. Firestore may not exist yet, or rules are blocking access.';
-    } else if(code.includes('permission-denied') || code.includes('PERMISSION_DENIED')) {
-      hint = 'Permission denied. Your Firestore rules are blocking access. Try the temporary open rules above.';
-    } else if(code.includes('unavailable') || code.includes('UNAVAILABLE')) {
-      hint = 'Firestore is unavailable. Check your internet connection.';
-    } else if(code.includes('not-found') || code.includes('NOT_FOUND')) {
-      hint = 'Firestore database not found. Make sure you created it in Firebase Console → Firestore Database.';
-    } else if(code.includes('unauthenticated') || code.includes('UNAUTHENTICATED')) {
-      hint = 'Authentication error. Try signing out and back in.';
+      reason = 'Connection timed out after 10 seconds.';
+      fix = 'Check your internet connection, then click Retry below.';
+    } else if(code.includes('permission') || msg.toLowerCase().includes('permission')) {
+      reason = 'Firestore rules are blocking access.';
+      fix = 'Go to Firebase Console → Firestore → Rules and make sure rules are published correctly.';
+    } else if(code.includes('unavailable') || msg.toLowerCase().includes('unavailable')) {
+      reason = 'Firestore service is temporarily unavailable.';
+      fix = 'Wait a minute and click Retry.';
+    } else if(code.includes('not-found') || msg.toLowerCase().includes('not-found')) {
+      reason = 'Firestore database not found.';
+      fix = 'Go to Firebase Console and make sure the Firestore Database has been created.';
+    } else if(code.includes('unauthenticated') || msg.toLowerCase().includes('unauthenticated')) {
+      reason = 'Your session has expired.';
+      fix = 'Sign out and sign back in.';
+    } else if(msg.toLowerCase().includes('internal assertion') || msg.toLowerCase().includes('unexpected state')) {
+      reason = 'Firebase SDK internal error (known issue with some versions).';
+      fix = 'Please hard-refresh the page (Ctrl+Shift+R or Cmd+Shift+R) to reload the latest version of the app.';
     } else {
-      hint = 'Error code: <strong>' + (code||'unknown') + '</strong><br>Message: ' + msg;
+      reason = (code || 'unknown') + ' — ' + msg.substring(0, 200);
+      fix = 'Try signing out and back in. If the problem persists, contact support with the error above.';
     }
 
     showLoadError(
-      '⚠️ Could not connect to the database.<br><br>' +
-      '<strong>Reason:</strong> ' + hint + '<br><br>' +
-      'Common fixes:<br>' +
-      '1. <strong>Firestore Database</strong> must be created in Firebase Console (Native mode)<br>' +
-      '2. <strong>Rules</strong> must be published — try the open rules to test<br>' +
-      '3. Make sure <strong>projectId</strong> in your config matches your Firebase project<br><br>' +
-      'The app is running with local data only — your changes will not be saved to the cloud.'
+      '<strong>⚠️ Could not load your data from the cloud</strong><br><br>' +
+      '<strong>Reason:</strong> ' + reason + '<br>' +
+      '<strong>Fix:</strong> ' + fix + '<br><br>' +
+      '<button onclick="retryLoadDB()" style="background:var(--green);color:#fff;border:none;padding:8px 18px;border-radius:8px;cursor:pointer;font-size:13px;font-family:Plus Jakarta Sans,sans-serif;margin-right:8px">↺ Retry Connection</button>' +
+      '<button onclick="doLogout()" style="background:var(--bg2);color:var(--text);border:1px solid var(--border);padding:8px 18px;border-radius:8px;cursor:pointer;font-size:13px;font-family:Plus Jakarta Sans,sans-serif">Sign Out & Back In</button>'
     );
   }
 }
@@ -1196,18 +1208,38 @@ function showLoadError(html) {
   }, 500);
 }
 
+async function retryLoadDB() {
+  hideSyncError();
+  document.getElementById('loading-screen').classList.remove('hidden');
+  await loadDB();
+  document.getElementById('loading-screen').classList.add('hidden');
+  if(DB && DB.settings) renderDashboard();
+}
+
 async function saveDB(dbObj) {
-  if(!db) { showSyncError('Firebase not initialised. Please reconfigure Firebase in Settings.'); return; }
-  if(!currentUser) { showSyncError('Not signed in. Please sign out and sign back in.'); return; }
+  if(!db) { showSyncError('Firebase not initialised.'); return; }
+  if(!currentUser) { showSyncError('Not signed in.'); return; }
+
+  // SAFETY CHECK: Never save unless it looks like a proper DB structure
+  // This prevents accidentally overwriting with a single account/transaction object
+  if(!dbObj || typeof dbObj !== 'object' ||
+     !Array.isArray(dbObj.transactions) ||
+     !Array.isArray(dbObj.accounts) ||
+     !dbObj.settings) {
+    console.error('saveDB BLOCKED — invalid DB structure:', dbObj);
+    showSyncError('Save blocked: data structure invalid. Refresh the page.');
+    return;
+  }
+
   try {
     await window._firebase.setDoc(userDoc(), dbObj);
-    hideSyncError(); // clear any previous error on success
+    hideSyncError();
   } catch(e) {
     console.error('saveDB error:', e.code, e.message);
     const msgs = {
-      'permission-denied':  'Firestore rules are blocking writes. Go to Firestore → Rules and publish the correct rules.',
+      'permission-denied':  'Firestore rules are blocking writes.',
       'unavailable':        'Firestore is unreachable. Check your internet connection.',
-      'not-found':          'Firestore database not found. Make sure it was created in Firebase Console.',
+      'not-found':          'Firestore database not found.',
       'unauthenticated':    'Session expired. Please sign out and sign back in.',
     };
     const friendly = msgs[e.code] || ('Firestore error: ' + (e.code || e.message));
