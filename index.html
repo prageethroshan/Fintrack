@@ -2265,26 +2265,28 @@ function togglePw(inputId, btn) {
 // INIT
 // ============================================================
 document.addEventListener('DOMContentLoaded', () => {
-  // Show loading while we check Firebase config
   document.getElementById('loading-screen').classList.remove('hidden');
   document.getElementById('login-screen').classList.add('hidden');
   document.getElementById('fb-setup-screen').classList.add('hidden');
 
-  const fbConfig = getFbConfig();
-  if(!fbConfig) {
-    // No config yet — show Firebase setup
-    document.getElementById('loading-screen').classList.add('hidden');
-    document.getElementById('fb-setup-screen').classList.remove('hidden');
-    return;
-  }
+  // Firebase config is hardcoded — no setup screen needed
+  const FIREBASE_CONFIG = {
+    apiKey: "AIzaSyAGu8uTM_TbOPNZ-yKUg0NP1e3jy7DK3V4",
+    authDomain: "fintrack-108eb.firebaseapp.com",
+    projectId: "fintrack-108eb",
+    storageBucket: "fintrack-108eb.firebasestorage.app",
+    messagingSenderId: "627965361368",
+    appId: "1:627965361368:web:d026ee683d05feab50ebad",
+    measurementId: "G-E984BVLTT0"
+  };
 
   function tryAutoInit() {
-    if(!window._firebase) { return; } // not ready yet, event will fire
-    const ok = initFirebaseFromConfig(fbConfig);
+    if(!window._firebase) { return; }
+    const ok = initFirebaseFromConfig(FIREBASE_CONFIG);
     if(!ok) {
       document.getElementById('loading-screen').classList.add('hidden');
-      document.getElementById('fb-setup-screen').classList.remove('hidden');
-      showFbErr('Saved config failed to initialise. Please re-enter your config.');
+      document.getElementById('login-screen').classList.remove('hidden');
+      alert('Firebase failed to initialise. Please check your internet connection and reload.');
       return;
     }
     startAuthListener();
