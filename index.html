@@ -1136,18 +1136,34 @@ async function loadDB() {
     console.error('loadDB error:', e);
     DB = defaultDB();
     ensureCashAccount();
-    // Show a helpful message if it timed out (most likely Firestore rules issue)
-    if(e.message === 'TIMEOUT' || (e.code && e.code.includes('permission'))) {
-      showLoadError(
-        '⚠️ Could not connect to the database.<br><br>' +
-        'Most likely your <strong>Firestore security rules</strong> are blocking access, ' +
-        'or the <strong>Firestore database has not been created yet</strong>.<br><br>' +
-        'Please check:<br>' +
-        '1. Firebase Console → <strong>Firestore Database</strong> → Make sure it exists<br>' +
-        '2. Firestore → <strong>Rules</strong> tab → Paste the rules from the setup screen → Publish<br><br>' +
-        'The app will continue with local data only.'
-      );
+
+    let hint = '';
+    const code = e.code || '';
+    const msg  = e.message || '';
+
+    if(msg === 'TIMEOUT') {
+      hint = 'Request timed out. Firestore may not exist yet, or rules are blocking access.';
+    } else if(code.includes('permission-denied') || code.includes('PERMISSION_DENIED')) {
+      hint = 'Permission denied. Your Firestore rules are blocking access. Try the temporary open rules above.';
+    } else if(code.includes('unavailable') || code.includes('UNAVAILABLE')) {
+      hint = 'Firestore is unavailable. Check your internet connection.';
+    } else if(code.includes('not-found') || code.includes('NOT_FOUND')) {
+      hint = 'Firestore database not found. Make sure you created it in Firebase Console → Firestore Database.';
+    } else if(code.includes('unauthenticated') || code.includes('UNAUTHENTICATED')) {
+      hint = 'Authentication error. Try signing out and back in.';
+    } else {
+      hint = 'Error code: <strong>' + (code||'unknown') + '</strong><br>Message: ' + msg;
     }
+
+    showLoadError(
+      '⚠️ Could not connect to the database.<br><br>' +
+      '<strong>Reason:</strong> ' + hint + '<br><br>' +
+      'Common fixes:<br>' +
+      '1. <strong>Firestore Database</strong> must be created in Firebase Console (Native mode)<br>' +
+      '2. <strong>Rules</strong> must be published — try the open rules to test<br>' +
+      '3. Make sure <strong>projectId</strong> in your config matches your Firebase project<br><br>' +
+      'The app is running with local data only — your changes will not be saved to the cloud.'
+    );
   }
 }
 
@@ -1163,13 +1179,40 @@ function showLoadError(html) {
 }
 
 async function saveDB(dbObj) {
-  if(!db || !currentUser) { console.warn('saveDB skipped: not ready'); return; }
+  if(!db) { showSyncError('Firebase not initialised. Please reconfigure Firebase in Settings.'); return; }
+  if(!currentUser) { showSyncError('Not signed in. Please sign out and sign back in.'); return; }
   try {
     await userDoc().set(dbObj);
+    hideSyncError(); // clear any previous error on success
   } catch(e) {
-    console.error('saveDB error:', e);
-    toast('Sync error — check your connection', 'error');
+    console.error('saveDB error:', e.code, e.message);
+    const msgs = {
+      'permission-denied':  'Firestore rules are blocking writes. Go to Firestore → Rules and publish the correct rules.',
+      'unavailable':        'Firestore is unreachable. Check your internet connection.',
+      'not-found':          'Firestore database not found. Make sure it was created in Firebase Console.',
+      'unauthenticated':    'Session expired. Please sign out and sign back in.',
+    };
+    const friendly = msgs[e.code] || ('Firestore error: ' + (e.code || e.message));
+    showSyncError(friendly);
   }
+}
+
+// Persistent sync error banner — stays visible until resolved
+function showSyncError(msg) {
+  let banner = document.getElementById('sync-error-banner');
+  if(!banner) {
+    banner = document.createElement('div');
+    banner.id = 'sync-error-banner';
+    banner.style.cssText = 'position:fixed;bottom:0;left:230px;right:0;background:#c0392b;color:#fff;padding:12px 24px;font-size:13px;z-index:8000;display:flex;align-items:center;justify-content:space-between;gap:16px';
+    document.body.appendChild(banner);
+  }
+  banner.innerHTML = '⚠️ <strong>Data not syncing:</strong> ' + msg +
+    ' &nbsp;<button onclick="hideSyncError()" style="background:rgba(255,255,255,0.2);border:none;color:#fff;padding:4px 12px;border-radius:6px;cursor:pointer;font-size:12px">Dismiss</button>';
+  banner.style.display = 'flex';
+}
+function hideSyncError() {
+  const b = document.getElementById('sync-error-banner');
+  if(b) b.style.display = 'none';
 }
 
 // Real-time listener — syncs changes from other devices
