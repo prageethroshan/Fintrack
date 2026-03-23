@@ -1126,7 +1126,7 @@ function userDoc() {
 
 async function loadDB() {
   if(!db || !currentUser) { DB = defaultDB(); ensureCashAccount(); return; }
-  const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), 10000));
+  const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), 20000));
   try {
     const snap = await Promise.race([window._firebase.getDoc(userDoc()), timeout]);
     if(snap.exists()) {
@@ -1156,6 +1156,7 @@ async function loadDB() {
   } catch(e) {
     console.error('loadDB error:', e.code, e.message, e);
     DB = defaultDB();
+    DB._loadFailed = true;  // Mark that this is NOT real data from Firestore
     ensureCashAccount();
 
     const code = (e.code || '').toLowerCase();
@@ -1165,7 +1166,7 @@ async function loadDB() {
     let fix = '';
 
     if(msg === 'TIMEOUT') {
-      reason = 'Connection timed out after 10 seconds.';
+      reason = 'Connection timed out after 20 seconds.';
       fix = 'Check your internet connection, then click Retry below.';
     } else if(code.includes('permission') || msg.toLowerCase().includes('permission')) {
       reason = 'Firestore rules are blocking access.';
@@ -1213,7 +1214,10 @@ async function retryLoadDB() {
   document.getElementById('loading-screen').classList.remove('hidden');
   await loadDB();
   document.getElementById('loading-screen').classList.add('hidden');
-  if(DB && DB.settings) renderDashboard();
+  if(DB && DB.settings && !DB._loadFailed) {
+    delete DB._loadFailed;
+    renderDashboard();
+  }
 }
 
 async function saveDB(dbObj) {
@@ -1231,8 +1235,21 @@ async function saveDB(dbObj) {
     return;
   }
 
+  // SAFETY CHECK: Never overwrite cloud data if our local DB came from
+  // a failed load. The _loadFailed flag means we're holding an empty
+  // default DB, NOT the user's real data.
+  if(dbObj._loadFailed) {
+    console.error('saveDB BLOCKED — DB was created from a failed load, refusing to overwrite cloud data.');
+    showSyncError('Save blocked: data was not loaded from cloud. Refresh or retry connection.');
+    return;
+  }
+
+  // Strip any internal flags before persisting (e.g. _loadFailed)
+  const cleanObj = Object.assign({}, dbObj);
+  delete cleanObj._loadFailed;
+
   try {
-    await window._firebase.setDoc(userDoc(), dbObj);
+    await window._firebase.setDoc(userDoc(), cleanObj);
     hideSyncError();
   } catch(e) {
     console.error('saveDB error:', e.code, e.message);
@@ -2168,10 +2185,20 @@ function startAuthListener() {
       }, 5000);
       await loadDB();
       clearTimeout(slowTimer);
-      if(!DB.settings.name || DB.settings.name === 'My Finances') {
+      const el2 = document.getElementById('loading-slow');
+      if(el2) el2.style.display = 'none';
+
+      // SAFETY: Only update the user's name in Firestore if loadDB
+      // actually retrieved real data. If the load failed, DB is a
+      // default/empty object — writing it back would permanently
+      // destroy the user's real data in the cloud.
+      const loadWasSuccessful = !DB._loadFailed;
+      if(loadWasSuccessful && (!DB.settings.name || DB.settings.name === 'My Finances')) {
         DB.settings.name = user.displayName || 'My Finances';
         await saveDB(DB);
       }
+      // Clean up internal flag so it doesn't get persisted
+      delete DB._loadFailed;
       document.getElementById('loading-screen').classList.add('hidden');
       subscribeRealtime();
       document.getElementById('s-user-name').textContent = DB.settings.name || 'My Finances';
